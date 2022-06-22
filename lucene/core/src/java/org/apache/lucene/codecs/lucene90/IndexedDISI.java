@@ -546,14 +546,32 @@ public final class IndexedDISI extends DocIdSetIterator {
         long sliceFilePointerBase = disi.slice.getFilePointer();
         int indexBase = disi.index;
         int indexEnd = disi.nextBlockIndex - 1;
-        int low = disi.index;
-        int high = disi.nextBlockIndex - 1;
 
+        // When the largest doc is smaller than target, move to the next splice
         disi.slice.seek(sliceFilePointerBase + Short.BYTES * (indexEnd - indexBase));
         int docLast = Short.toUnsignedInt(disi.slice.readShort());
         if (docLast < targetInBlock) {
+          disi.index = indexEnd + 1;
           return false;
         }
+
+        // Do exponential search
+//        int exponentialSearchOffset = 0;
+//        while(indexBase + exponentialSearchOffset < disi.nextBlockIndex) {
+//          disi.slice.seek(sliceFilePointerBase + Short.BYTES * exponentialSearchOffset);
+//          if (Short.toUnsignedInt(disi.slice.readShort()) > targetInBlock) {
+//            break;
+//          }
+//          exponentialSearchOffset = exponentialSearchOffset == 0? 1 : exponentialSearchOffset * 2;
+//        }
+//
+//        // Do binary search
+//        int low = indexBase + exponentialSearchOffset / 2;
+//        disi.slice.seek(sliceFilePointerBase + Short.BYTES * (low - indexBase));
+//        int high = Math.min(indexBase + exponentialSearchOffset, disi.nextBlockIndex - 1);
+
+        int low = indexBase;
+        int high = disi.nextBlockIndex - 1;
 
         while (low <= high) {
           int mid = low + (high - low) / 2;
@@ -570,8 +588,7 @@ public final class IndexedDISI extends DocIdSetIterator {
             high = mid - 1;
           }
         }
-        // Ensure low is no larger than indexEnd
-        low = Math.min(indexEnd, low);
+
         disi.slice.seek(sliceFilePointerBase + Short.BYTES * (low - indexBase));
         int doc = Short.toUnsignedInt(disi.slice.readShort());
         disi.doc = disi.block | doc;
@@ -590,7 +607,33 @@ public final class IndexedDISI extends DocIdSetIterator {
 
         long sliceFilePointerBase = disi.slice.getFilePointer();
         int indexBase = disi.index;
-        int low = disi.index;
+        int indexEnd = disi.nextBlockIndex - 1;
+
+        // When the largest doc is smaller than target, move to the next splice
+        disi.slice.seek(sliceFilePointerBase + Short.BYTES * (indexEnd - indexBase));
+        int docLast = Short.toUnsignedInt(disi.slice.readShort());
+        if (docLast < targetInBlock) {
+          disi.index = indexEnd + 1;
+          disi.exists = false;
+          return false;
+        }
+
+        // Do exponential search
+//        int exponentialSearchOffset = 0;
+//        while(indexBase + exponentialSearchOffset < disi.nextBlockIndex) {
+//          disi.slice.seek(sliceFilePointerBase + Short.BYTES * exponentialSearchOffset);
+//          if (Short.toUnsignedInt(disi.slice.readShort()) > targetInBlock) {
+//            break;
+//          }
+//          exponentialSearchOffset = exponentialSearchOffset == 0 ? 1 : exponentialSearchOffset * 2;
+//        }
+//
+//        // Do binary search
+//        int low = indexBase + exponentialSearchOffset / 2;
+//        disi.slice.seek(sliceFilePointerBase + Short.BYTES * (low - indexBase));
+//        int high = Math.min(indexBase + exponentialSearchOffset, disi.nextBlockIndex - 1);
+
+        int low = indexBase;
         int high = disi.nextBlockIndex - 1;
 
         while (low <= high) {
@@ -607,8 +650,10 @@ public final class IndexedDISI extends DocIdSetIterator {
             high = mid - 1;
           }
         }
-        // Ensure high is no smaller than indexBase
+
+        // When the current splice's first doc is larger than target, stay at the end
         high = Math.max(indexBase, high);
+
         disi.slice.seek(sliceFilePointerBase + Short.BYTES * (high - indexBase));
         disi.index = high;
         disi.exists = false;
